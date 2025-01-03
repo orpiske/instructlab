@@ -3,12 +3,12 @@
 # Based on Zack Zlotnik's container file
 
 # runtime container has libraries, CLI tools, and virtual env
-FROM registry.fedoraproject.org/fedora-toolbox:40 AS runtime
+FROM registry.fedoraproject.org/fedora-toolbox:41 AS runtime
 # args and env (default to gfx1100, GFX level 11.0.0, first GPU only)
 ARG AMDGPU_ARCH=gfx1100
 ARG HSA_OVERRIDE_GFX_VERSION=11.0.0
 ARG HIP_VISIBLE_DEVICES=0
-ARG PYTORCH_ROCM_VERSION=5.7
+ARG PYTORCH_ROCM_VERSION=6.1
 # PyTorch 2.2.1 does not support torch_compile with 3.12
 ARG PYTHON=python3.11
 ENV AMDGPU_ARCH="${AMDGPU_ARCH}" \
@@ -16,13 +16,18 @@ ENV AMDGPU_ARCH="${AMDGPU_ARCH}" \
     HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION}" \
     PYTORCH_ROCM_VERSION="${PYTORCH_ROCM_VERSION}" \
     PYTHON="${PYTHON}" \
-    CLANG_VER="17"
+    CLANG_VER="17" \
+    AMD_GPU_VERSION=6.3.1 \
+    AMD_GPU_RHEL_BASE=9.5 \
+    AMD_GPU_PACKAGE_VER=6.3.60301-1
 # runtime dependencies (python-devel for torch_compile)
 COPY containers/rocm/remove-gfx.sh /tmp/
 RUN --mount=type=cache,target=/var/cache/dnf,z \
-    dnf install -y --nodocs --setopt=install_weak_deps=False --setopt=keepcache=True \
-    rocm-runtime hipblas hiprand hipsparse lld-libs ${PYTHON} ${PYTHON}-devel nvtop radeontop make git gh && \
-    /tmp/remove-gfx.sh
+# RUN dnf install -y https://repo.radeon.com/amdgpu-install/${AMD_GPU_VERSION}/rhel/${AMD_GPU_RHEL_BASE}/amdgpu-install-${AMD_GPU_PACKAGE_VER}.el9.noarch.rpm && \
+    dnf install -y https://repo.radeon.com/amdgpu-install/${AMD_GPU_VERSION}/rhel/${AMD_GPU_RHEL_BASE}/amdgpu-install-${AMD_GPU_PACKAGE_VER}.el9.noarch.rpm
+RUN dnf install -y --nodocs --setopt=install_weak_deps=False --setopt=keepcache=True rocm hipblas hiprand hipsparse lld-libs python3-setuptools ${PYTHON} ${PYTHON}-devel nvtop radeontop make git gh && \
+    /tmp/remove-gfx.sh && \
+    dnf clean all
 # virtual env, umask 0000 to allow end-user to write to venv later
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     VIRTUAL_ENV="/opt/app-root" \
